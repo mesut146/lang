@@ -42,6 +42,8 @@ mkdir -p $out_dir
 $dir/cache_env.sh $out_dir
 
 export XTERMUX=1
+#apt_cross.sh skips the package install when the image already did it
+#(XENV_READY) and still fetches the NDK, which is checkout-specific.
 XCROSS=$XCROSS $dir/apt_cross.sh
 XTERMUX=1 XCROSS=$XCROSS $dir/llvm.sh
 # NB: Debian arm64 libLLVM from llvm.sh is NOT usable for Android linking.
@@ -57,7 +59,7 @@ else
 fi
 #LIBLLVM="$host_tool/lib/libLLVM.so.19.1"
 
-NDK_ROOT="$dir/../android-ndk-r27c"
+NDK_ROOT="${NDK_ROOT:-$dir/../android-ndk-r27c}"
 if [ ! -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++" ]; then
   echo "NDK not found at $NDK_ROOT (apt_cross.sh should have downloaded it)" && exit 1
 fi

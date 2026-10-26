@@ -70,8 +70,9 @@ jobs:
       #build step into an 11-minute wait (2026-10-22: 28.7MB at 95KB/s, 47.5MB
       #at 158KB/s; the build itself was 60s). restore-keys falls back to an
       #older cache when bin/llvm.sh changes: a stale LLVM 19 is fine, fetching
-      #it again is not. The docker jobs (aarch64/termux) install LLVM inside
-      #the image, so only this job uses the cache.
+      #it again is not. The docker jobs fetch their own LLVM into the same
+      #build/tmp at run time (arch-specific debs), so they use their own keys
+      #below and do not share this one.
       - name: "cache LLVM"
         uses: actions/cache@v4
         with:
@@ -149,10 +150,42 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      #The cross image holds only the environment (debian:sid + the arm64
+      #cross packages), not the checkout: bin/docker.sh bind-mounts the
+      #workspace, so the image is reusable across commits. Without the cache
+      #docker spent ~30s per run exporting/unpacking the COPY-ed tree for a
+      #~60s build. Key on what the image actually installs; restore-keys keeps
+      #a stale environment usable (apt re-checks it at run time). The termux
+      #job builds the same image, so a cold-cache run may save it twice --
+      #the second save finds the key and is dropped.
+      - name: "cache cross image (arm64)"
+        id: cross_image
+        uses: actions/cache@v4
+        with:
+          path: cross-image.tar
+          key: cross-image-${{ hashFiles('bin/Dockerfile', 'bin/apt_cross.sh', 'bin/Dockerfile.dockerignore') }}
+          restore-keys: |
+            cross-image-
+
+      - name: "load cached cross image (arm64)"
+        if: steps.cross_image.outputs.cache-hit == 'true'
+        run: docker load -i cross-image.tar
+
+      #llvm.sh downloads the arm64 LLVM debs (and the noble runtime deps) into
+      #build/tmp once; later runs reuse them. The image does not ship them
+      #(the debs are ~100MB and the extracted tree is arch-specific).
+      - name: "cache LLVM debs (arm64)"
+        uses: actions/cache@v4
+        with:
+          path: build/tmp
+          key: llvm19-arm64-${{ hashFiles('bin/llvm.sh', 'bin/apt.sh') }}
+          restore-keys: |
+            llvm19-arm64-
+
       - name: build-arm64
         id: build_arm64
         run: |
-          XOPT="-O2" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
+          XSAVE_IMAGE="${{ steps.cross_image.outputs.cache-hit != 'true' }}" XOPT="-O2" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
         if: ${{ steps.build_arm64.outcome == 'success' }}
@@ -206,10 +239,40 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      #Same image as the arm64 job: the termux build needs the arm64 cross
+      #packages (bin/apt_cross.sh) but not the NDK, which is arch-independent
+      #and downloads fast, so apt_cross.sh fetches it at run time instead of
+      #baking it into the cache. It used to be COPY-ed into the build context
+      #and the image was rebuilt with --no-cache --pull every run: ~2 minutes
+      #of layer export/unpack (the NDK included) around a ~90s build.
+      - name: "cache cross image (termux)"
+        id: cross_image
+        uses: actions/cache@v4
+        with:
+          path: cross-image.tar
+          key: cross-image-${{ hashFiles('bin/Dockerfile', 'bin/apt_cross.sh', 'bin/Dockerfile.dockerignore') }}
+          restore-keys: |
+            cross-image-
+
+      - name: "load cached cross image (termux)"
+        if: steps.cross_image.outputs.cache-hit == 'true'
+        run: docker load -i cross-image.tar
+
+      #llvm.sh only needs the llvm-19 headers under termux; the deb is fetched
+      #into build/tmp once and then reused (the container sees the same path
+      #through the bind-mounted checkout).
+      - name: "cache LLVM headers (termux)"
+        uses: actions/cache@v4
+        with:
+          path: build/tmp
+          key: llvm19-termux-${{ hashFiles('bin/llvm.sh') }}
+          restore-keys: |
+            llvm19-termux-
+
       - name: build-termux
         id: build_termux
         run: |
-          XOPT="-O2" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
+          XSAVE_IMAGE="${{ steps.cross_image.outputs.cache-hit != 'true' }}" XOPT="-O2" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
 
       - name: Upload Artifacts termux
         if: ${{ steps.build_termux.outcome == 'success' }}

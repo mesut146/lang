@@ -12,3 +12,6 @@ bin/tmp.txt
 
 # agent session dumps
 ses_*.json
+cross-image.tar
+android-ndk-r27c/
+android-ndk-r27c-linux.zip

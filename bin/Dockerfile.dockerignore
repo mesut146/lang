@@ -1,0 +1,9 @@
+#bin/Dockerfile only needs bin/apt_cross.sh: the sources and toolchains are
+#bind-mounted at run time, so the build context must not carry the checkout
+#(or the downloaded toolchains, or the ~2.5GB NDK) into the daemon. This is a
+#per-Dockerfile ignore (BuildKit picks it up next to `-f bin/Dockerfile`), so
+#the root .dockerignore keeps its rules for the legacy x64 debug image.
+*
+!bin
+bin/*
+!bin/apt_cross.sh
