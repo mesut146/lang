@@ -2401,12 +2401,15 @@ Ownership only — no Rust-like borrows:
   zip; the termux path succeeds from the cached image with the NDK on a
   bind-mounted dir (39MB zip); `docker save` is 274MB/46s locally and
   `docker load` 15.5s (the image is 3.8GB on disk but only compressed layers
-  travel). CI, cold cache (run 40320129298, the caches did not exist yet):
-  termux 4m35s -> 2m22s, arm64 3m20s -> 3m06s, x86_64 1m56s; the post steps
-  saved `cross-image` in 3.6s and `llvm19-termux` in 3.4s (the image build
-  itself exports its apt-only layer in 15.7s, vs 112s for the NDK layer
-  before). The warm run should drop the image build for the ~15s load and the
-  LLVM fetch for a cache restore.
+  travel). CI timings (40320129298 cold, 40320881296 warm): termux 4m35s ->
+  2m22s -> 1m39s, arm64 3m20s -> 3m06s -> 1m46s, x86_64 1m56s/1m53s. The warm
+  termux log shows the cache restore, `Loaded image: cross:latest`, no
+  `docker build`, and the restored LLVM headers; what remains per run is the
+  image load, the NDK fetch/unzip into the mounted checkout (~20s; caching
+  2.5GB to save it is not worth a second cache entry) and the ~40s
+  bridge+compile+zip. The image's apt-only layer exports in 15.7s (the NDK
+  layer was 112s); the cold-run post steps saved `cross-image` in 3.6s and
+  `llvm19-termux` in 3.4s.
   Note: the container runs as root, so what it writes into the checkout
   (`build/`, the zip) is root-owned; later steps only read it, and a local run
   needs `sudo rm -rf` to clean up.
