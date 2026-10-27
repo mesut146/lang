@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-27. Main: `c3f3bc0` (owns `681a8cc` array places, place
+Date: 2026-10-27. Main: `b15cc7c` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -58,7 +58,10 @@ as layers every run), and the lexer EOF/error-path guards `c3f3bc0` (a file
 ending in `/`, in a digit or in a string backslash, an invalid escape and an
 unclosed block comment now report a parse/lexer error instead of an index or
 unwrap panic; grammar/Lexer.g and grammar/Parser.g synced in
-`8b5dd25`/`6eb24b7`).
+`8b5dd25`/`6eb24b7`), and the parser EOF token `b15cc7c` (peek/peek(1) and
+the is(a, b) lookahead past the end see a synthetic EOF token, and
+popv/name/parse_item report the end of input instead of indexing the token
+list).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2482,6 +2485,36 @@ Ownership only — no Rust-like borrows:
   `panic /home/...` literals, B/C/D bake 690 `panic src/...`; `nm` A == B ==
   C, the panic literals are identical after normalizing the prefix, and
   B == C == D byte-identical.
+
+- Parser: an EOF token past the last token (2026-10-27, on `parser-eof-token`).
+  The lexer guards above turned the buffer-EOF panics into diagnostics, but
+  `Parser::get` still indexed out of the token list (`eof pos=N len=N`) when a
+  malformed buffer ran out while the parser wanted a token or a lookahead:
+  `import`/`func` at EOF (`popv`), `use` (`name`), an unclosed `mod M{`
+  (the body loop's `parse_item` fallback peek), a block body ending in `if`
+  (the `is(IF, LET)` lookahead, i.e. `peek(1)`), an object literal ending in
+  `{` (`entry`'s `isName(peek)`), a struct field ending after its name and
+  `static x: ` (a type name).
+  * `Parser` now carries a synthetic EOF token (`eof: Token`) and `get()`
+    returns it for `pos >= tokens.len()`, stamped with the last token's line.
+    Every peeker therefore sees a real token: `peek`/`peek(1)`, the
+    `is(a, b)` lookahead, and the error paths.
+  * `popv()` and `name()` -- the unguarded readers -- report "unexpected end
+    of input"; `parse_item()` reports it instead of "invalid top level decl"
+    with a peek past the end. `consume()`/`prim()` keep their existing EOF
+    messages (they are friendlier than the generic token mismatch).
+  The panic is removed rather than worked around. Error paths only: no
+  language, resolver or codegen change.
+  Tests: tests/fail/parse_eof_import.x, parse_eof_mod.x, parse_eof_lookahead.x,
+  parse_eof_name.x, parse_eof_object.x (each ends at the trigger without a
+  trailing newline); all five are red on the pre-fix compiler with
+  "eof pos=N len=N" and green after. Suite green on the fixpoint binary with
+  MALLOC_CHECK_=3 (`normal pass=144 xpass=0`; fmt, debug, trace, std, lsp,
+  own, vararg, inc, tools, buildflags, pipeline, path and opt pass; leak
+  self-skips). Triangle: A (v1.20) bakes 689 absolute panic literals, B/C/D
+  689 relative ones (689, not 690: this drops `get`'s "eof pos" panic);
+  `nm` A == B, the literals are identical after normalizing the prefix, and
+  B == C == D byte-identical (stage1 and every .a).
 
 ## Known open holes (documented, not yet solved)
 
