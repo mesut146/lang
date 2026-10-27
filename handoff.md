@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-26. Main: `f86f9d0` (owns `681a8cc` array places, place
+Date: 2026-10-27. Main: `c3f3bc0` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -54,7 +54,11 @@ jumps no longer emits its scope drops after the terminator; closes the
 checkout; assert/diagnostic/DWARF paths unchanged), and the CI cross-image
 cache `f86f9d0` (the docker images hold only the environment and are cached;
 the checkout is bind-mounted, so the NDK and the tree are no longer exported
-as layers every run).
+as layers every run), and the lexer EOF/error-path guards `c3f3bc0` (a file
+ending in `/`, in a digit or in a string backslash, an invalid escape and an
+unclosed block comment now report a parse/lexer error instead of an index or
+unwrap panic; grammar/Lexer.g and grammar/Parser.g synced in
+`8b5dd25`/`6eb24b7`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2413,6 +2417,71 @@ Ownership only — no Rust-like borrows:
   Note: the container runs as root, so what it writes into the checkout
   (`build/`, the zip) is root-owned; later steps only read it, and a local run
   needs `sudo rm -rf` to clean up.
+
+- Grammar docs: `grammar/Lexer.g` and `grammar/Parser.g` describe the real
+  front end again (2026-10-26, on `grammar-sync`; `bin/sync.sh` ships
+  `grammar/` in the source zip, nothing reads it at build time).
+  * `Lexer.g` listed the pre-implementation tokens (class/interface/switch/
+    var, `@`, `...`, `->`). Rebuilt from src/ast/lexer.x: the 41 keywords
+    (`void` is not one -- the VOID token is never emitted), the longest-match
+    operator table (`^` is POW; `>>`, `>>=`, `<<=`, `%=`, `&=` and `|=` are
+    not operators), the number rules (leading sign, `_` separators, hex
+    without suffix, `1i32` vs `1_i32`, `a-1` becoming INTEGER_LIT(-1)), the
+    escape set, COMMENT as a token the parser strips and WS as the only skip
+    class. The header lists the TokenType entries the lexer never emits
+    (VOID, GTGT, LTLTEQ, GTGTEQ, PERCENTEQ, OREQ, ANDEQ, EOF_).
+  * `Parser.g` was still the May-2025 sketch. Rewritten from src/ast/parser.x:
+    unit/items (imports, attributes, struct/enum/impl/trait/func/static/
+    const/type/extern/mod/use/macro), the name slots (Parser::name vs the
+    popv sites that take any token), blocks and statements (the block-value
+    rule, no ";" after a block-like statement), if/if let/match/lambdas, the
+    precedence chain with its real quirks (a ">" GT token pair merges into
+    ">>" at the comparison level; every level folds left, assignment
+    included), postfix/primary forms, object literals with base entries, and
+    types (tuples, function types, pointers, arrays/slices, scoped generics
+    with the isTypeArg lookahead). A tail section lists the syntax holes that
+    are parse errors today (tuple structs, empty enums, `let` without an
+    initializer, `null`, `%=`/`&=`/`|=`/`<<=`/`>>=`, a ";" after a
+    block-like statement, prim2-only for-each/match/if-let sources, method
+    turbofish, unary `~`). `prec.txt` is now the get_prec table.
+  Verified by lexing every listed spelling with the real lexer (81/81 token
+  types match) and compiling a corpus of the production forms; the only
+  quoted terminals not in Lexer.g are the contextual IDENTs (`use`, `macro`,
+  `in`, `_`).
+
+- Front end: EOF and bad-literal errors report diagnostics instead of
+  indexing past the buffer (2026-10-27, on `lexer-eof-guards`). Five inputs
+  crashed with an internal error:
+  * a file ending in `/` -- next0 did `peek(1)` before the comment checks;
+    it now tests `has(2)` first, so the `/` becomes a DIV.
+  * a file ending in a digit -- read_number peeked for "0x", ran its hex and
+    decimal loops and tested '.'/'_' without has(). All guarded, so the
+    number lexes and the parser reports the missing ";".
+  * a file ending in a string backslash -- read_string peeked the escape
+    past the end; it now reports "unterminated string literal".
+  * an invalid escape (`"\q"`) -- read_string unwrapped checkEscape's
+    Result, so the error surfaced as "unwrap on empty Result" from
+    result.x; it propagates the Err now (the usual "lexer error in file
+    ...:N `line`" header plus "invalid escape: q val: 113").
+  * an unclosed block comment that ends with a newline -- make_err_header
+    asked get_line for the line after the trailing newline and hit "not
+    possible" (utils.x); get_line returns "" for a line past the last one,
+    which its own comment already promised for the no-newline case.
+  The two EOF cases also exposed Parser::get's bare index panic, so
+  consume() and prim() now report "unexpected end of input" with the source
+  line. Error paths only: no language, resolver or codegen change.
+  Tests: tests/fail/lex_eof_slash.x, lex_eof_number.x and lex_eof_string.x
+  (deliberately written without a trailing newline -- that is the trigger),
+  lex_escape_invalid.x, lex_comment_unclosed.x. All five are red on the
+  pre-fix compiler (v1.20: "index N out of bounds" x3, "unwrap on empty
+  Result", "not possible") and green after. Suite green on the fixpoint
+  binary with MALLOC_CHECK_=3 (`normal pass=139 xpass=0`; fmt, debug, trace,
+  std, lsp, own, vararg, inc, tools, buildflags, pipeline, path and opt
+  pass; leak self-skips, no valgrind). Triangle: A (built by v1.20) is the
+  string-shift case inherited from the panic-path change -- it bakes 690
+  `panic /home/...` literals, B/C/D bake 690 `panic src/...`; `nm` A == B ==
+  C, the panic literals are identical after normalizing the prefix, and
+  B == C == D byte-identical.
 
 ## Known open holes (documented, not yet solved)
 
