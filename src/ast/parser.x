@@ -12,18 +12,21 @@ struct Parser{
   unit: Option<Unit*>;
   lexer: Lexer;
   comments: List<Comment>;
+  //handed out by get() past the last token, so peeks and lookaheads at the
+  //end of input see a token instead of indexing out of the list
+  eof: Token;
 }
 
 impl Parser{
   func from_path(path: String): Parser{
     let lexer = Lexer::from_path(path.clone());
-    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new()};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new(), Token::new(TokenType::EOF_)};
     res.fill();
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf, line);
-    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new()};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new(), Token::new(TokenType::EOF_)};
     res.fill();
     return res;
   }
@@ -83,7 +86,17 @@ impl Parser{
   }
   
   func get(self, pos: i32): Token*{
-    if(pos >= self.tokens.len()) panic("eof pos={} len={}", pos, self.tokens.len());
+    if(pos >= self.tokens.len()){
+      //Past the end: hand back the synthetic EOF token. Every caller then
+      //reports at the end of input (consume/prim/popv) or sees a failed
+      //lookahead (is(a,b), peek(1)) instead of a list index panic.
+      if(self.tokens.empty()){
+        self.eof.line = 1;
+      }else{
+        self.eof.line = self.tokens.last().line;
+      }
+      return &self.eof;
+    }
     return self.tokens.get(pos);
   }
   
@@ -94,6 +107,9 @@ impl Parser{
   }
   
   func popv(self): String{
+    if(!self.has()){
+      self.err("unexpected end of input");
+    }
     return self.pop().value.owned();
   }
     
@@ -195,6 +211,9 @@ impl Parser{
   }
 
   func parse_item(self, scope: Option<Type>*): Item{
+    if(!self.has()){
+      self.err("unexpected end of input");
+    }
     let attr = self.parse_attrs();
     if(self.is(TokenType::STRUCT)){
       return Item::Decl{self.parse_struct(attr, scope)};
@@ -999,6 +1018,9 @@ impl Parser{
         || t is TokenType::MOD;
   }
   func name(self): String{
+    if(!self.has()){
+      self.err("unexpected end of input");
+    }
     if(isName(self.peek())){
       return self.popv();
     }
