@@ -98,6 +98,10 @@ impl Parser{
   }
     
   func consume(self, tt: TokenType): Token*{
+    if(!self.has()){
+      print("{}:{}\nunexpected end of input was expecting {:?}\n", &self.lexer.path, self.line(), &tt);
+      panic("");
+    }
     let t: Token* = self.pop();
     if(t.type is tt) return t;
     print("{}:{}\nunexpected token {:?} was expecting {:?}\n", &self.lexer.path, t.line, t, &tt);
@@ -1250,6 +1254,9 @@ impl Parser{
   }
 
   func prim(self, allow_obj: bool): Expr{
+    if(!self.has()){
+      self.err("unexpected end of input");
+    }
     let tok = self.peek();
     let n = self.node();
     if(self.is(TokenType::DOLLAR)){

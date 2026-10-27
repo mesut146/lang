@@ -287,10 +287,10 @@ impl Lexer{
     }
 
     if (c == '/') {
-        let c2 = self.peek(1);
-        if (c2 == '/') {
+        //a lone '/' at the end of the buffer has no second char to peek at
+        if (self.has(2) && self.peek(1) == '/') {
             return Result<Token, String>::ok(self.line_comment());
-        } else if (c2 == '*') {
+        } else if (self.has(2) && self.peek(1) == '*') {
             return self.block_comment();
         } else {
             return self.read_op();
@@ -355,8 +355,14 @@ impl Lexer{
     while (self.pos < self.buf.len()) {
         c = self.read();
         if (c == '\\') {
-            //s.append("\\");
+            //a backslash at the very end of the buffer escapes nothing
+            if(!self.has()){
+              break;
+            }
             let escp = checkEscape(self.peek());
+            if(escp.is_err()){
+              return Result<Token, String>::err(escp.unwrap_err());
+            }
             str.append(escp.unwrap() as i8);
             self.pos += 1;
         } else if (c == open) {
@@ -400,9 +406,9 @@ impl Lexer{
     if(self.peek() == '-'){
       self.pos += 1;
     }
-    if(self.peek(0) == '0' && self.peek(1) == 'x'){
+    if(self.peek(0) == '0' && self.has(2) && self.peek(1) == 'x'){
       self.pos += 2;
-      while(true){
+      while(self.has()){
         let c = self.peek();
         if(!c.is_hex()) break;
         self.pos += 1;
@@ -411,7 +417,7 @@ impl Lexer{
       return Result<Token, String>::ok(Token::new(type, self.str(start, self.pos)));
     }
     self.pos += 1;
-    while (true){
+    while (self.has()){
       let c = self.peek();
       if(c.is_digit()){
         self.pos += 1;
@@ -420,7 +426,7 @@ impl Lexer{
       }else break;
     }
     let dot = false;
-    if(self.peek() == '.' && self.has(2) && self.peek(1).is_digit()){
+    if(self.has() && self.peek() == '.' && self.has(2) && self.peek(1).is_digit()){
       dot = true;
       self.pos += 2;
       while (self.has()) {
@@ -430,7 +436,7 @@ impl Lexer{
       }
     }
     let mustSuffix = false;
-    if(self.peek() == '_'){
+    if(self.has() && self.peek() == '_'){
       self.pos += 1;
       mustSuffix = true; 
     }
@@ -445,6 +451,9 @@ impl Lexer{
       }
     }
     if(mustSuffix && !has){
+      if(!self.has()){
+        return Result<Token, String>::err("expected literal suffix at end of input".owned());
+      }
       return Result<Token, String>::err(format("expected literal suffix got: {}", self.peek()));
     }
     let type = TokenType::INTEGER_LIT;

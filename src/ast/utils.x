@@ -393,7 +393,10 @@ func get_line(buf: str, line: i32): str{
         }
       }
     }
-    panic("not possible");
+    //a line past the last one (the lexer's counter can run one ahead when an
+    //unclosed comment ends with a newline): nothing to show, return empty so
+    //the real error proceeds instead of dying in the header formatter
+    return "";
   }
 
 struct Utils;
