@@ -1,7 +1,19 @@
-Other 0
+//Binding power, from Parser::get_prec in src/ast/parser.x. Lower binds
+//looser; expr_level(0) is parse_expr and expr_level(11) is as_is, which
+//covers the postfix chain, the prefix operators and as/is.
+0   = += -= *= /= ^=
+1   ||
+2   &&
+3   |
+4   ^
+5   &
+6   == !=
+7   < > <= >=        two GT tokens merge into ">>" at this level
+8   <<
+9   + -
+10  * / %
+11  as/is, postfix (.name .0 [..] ?), prefix (& ! - * ++ --)
 
-FieldAccess | ArrAccess | Ques
-
-Unary
-Infix | As |Is
-
+//Every level folds left, assignment included. Only the assignment spellings
+//listed at 0 exist: the lexer has no PERCENTEQ/ANDEQ/OREQ/LTLTEQ/GTGTEQ
+//tokens (see Lexer.g), so `a %= b` and `a >>= b` do not parse.
