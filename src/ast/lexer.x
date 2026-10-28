@@ -35,7 +35,6 @@ func make_keywords(): HashMap<str, TokenType>{
   map.insert("let", TokenType::LET);
   map.insert("match",  TokenType::MATCH);
   map.insert("mod", TokenType::MOD);
-  map.insert("null", TokenType::NULL_LIT);
   map.insert("return", TokenType::RETURN);
   map.insert("static", TokenType::STATIC);
   map.insert("struct", TokenType::STRUCT);

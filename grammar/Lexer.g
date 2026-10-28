@@ -19,6 +19,8 @@
 //  * TokenType has entries the lexer never emits: VOID (no `void` keyword, so
 //    `void` is IDENT), GTGT, LTLTEQ, GTGTEQ, PERCENTEQ, OREQ, ANDEQ (their
 //    spellings are not in `make_ops`) and the synthetic EOF_.
+//  * `null` is not a keyword either (it is IDENT): the null pointer is
+//    `ptr::null<T>()`, and the literal spelling was removed on 2026-10-28.
 token {
   //keywords -- Lexer::make_keywords
   AS: 'as';
@@ -39,7 +41,6 @@ token {
   LET: 'let';
   MATCH: 'match';
   MOD: 'mod';
-  NULL_LIT: 'null';
   RETURN: 'return';
   STATIC: 'static';
   STRUCT: 'struct';

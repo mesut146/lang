@@ -3820,6 +3820,13 @@ impl Resolver{
     if(res.is_some()){
       return res.unwrap();
     }
+    //`null` stopped being a literal (2026-10-28): point at the replacement
+    //instead of the generic unknown-identifier message. A user declaration
+    //named `null` is found by visit_name_opt above, so this only fires on a
+    //lookup miss.
+    if(name.eq("null")){
+      self.err(node, "`null` is not a literal; use ptr::null<T>()");
+    }
     self.err(node, format("unknown identifier '{}'", name));
     panic("");
   }

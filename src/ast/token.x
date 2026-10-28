@@ -23,7 +23,6 @@ enum TokenType {
     BOOLEAN,
     TRUE,
     FALSE,
-    NULL_LIT,
     INTEGER_LIT,
     FLOAT_LIT,
     CHAR_LIT,

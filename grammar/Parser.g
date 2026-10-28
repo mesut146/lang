@@ -207,17 +207,22 @@ simpleType: raw_name ("<" type ("," type)* ">")?;
 //parser's lookahead (isTypeArg) accepts the tokens up to the closing ">".
 
 //Known holes in the current syntax (each is a parse error today):
-//  * `let x: T;` -- a `let` always needs "=" expr.
 //  * enum tuple variants -- the variant "(" form still parses `name: type`
 //    entries, so `A(i32)` does not parse (only tuple *structs* are positional).
-//  * `null` -- NULL_LIT is neither isLit nor isName, so it is not usable.
 //  * `a %= b`, `a &= b`, `a |= b`, `a <<= b`, `a >>= b` -- get_prec knows
 //    PERCENTEQ/ANDEQ/OREQ/LTLTEQ/GTGTEQ, but the lexer never produces those
-//    tokens (`%=` is PERCENT EQ, and so on; see Lexer.g).
-//  * a ";" after an if / if let / match / block statement in a block.
+//    tokens (`%=` is PERCENT EQ, and so on; see Lexer.g). `^=` does lex; it
+//    parses but has no resolver/emitter branch.
+//  * a ";" after an if / if let / match / while / for / block statement in a
+//    block.
 //  * for-each sources, match scrutinees and if-let values are prim2(false):
-//    no binary operator and no object literal. `for x in a + b { }` and
-//    `match a + b { }` do not parse.
+//    no binary operator, no `as` cast and no object literal. `for x in a + b
+//    { }` and `match a + b { }` do not parse.
 //  * `x.f<i32>()` -- a postfix `.` call takes no type arguments, so method
 //    turbofish does not parse (free functions do: `f<i32>(x)`).
 //  * `~` exists as a token but has no unary production.
+//
+//Not planned (user, 2026-10-28): `null` is not a literal -- the lexer no
+//longer reserves the name and the null pointer is `ptr::null<T>()`. `let x:
+//T;` stays a parse error: it would need definite-assignment analysis, and
+//`let x = ...;` covers the use.
