@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-28. Main: `dd34aaa` (owns `681a8cc` array places, place
+Date: 2026-10-28. Main: `654abc4` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -65,7 +65,8 @@ list), and tuple structs + empty enums `3473901` (positional
 `struct T(i32, bool);` built as `T{1, true}` and read/written as `t.0`, with
 Clone/Drop/Debug/Display and the incremental cache; `enum Never {}`), and the
 `null` literal removed `dd34aaa` (`null` is an IDENT now -- the null pointer is
-`ptr::null<T>()`; `let x: T;` recorded as not planned).
+`ptr::null<T>()`; `let x: T;` recorded as not planned), and three parser holes
+`654abc4` (`;` after block-like statements, unary `~`, method turbofish).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2588,6 +2589,39 @@ Ownership only — no Rust-like borrows:
   685 relative ones; `nm` A == B, the literals are identical after
   normalizing the prefix, and B == C == D byte-identical (stage1 and every
   .a).
+
+- Three grammar holes closed (2026-10-28, on `next-holes`): `;` after a
+  block-like statement, unary `~`, and method turbofish.
+  * `parse_block`'s fast path (if / if let / match / bare block) added the
+    expression as a statement and left a trailing `;` for the next iteration,
+    where `parse_expr` rejected it ("invalid expr ';'"). It now consumes the
+    optional `;`; `while`/`for` (whose bodies are blocks) do the same in
+    `parse_stmt`. The no-semicolon tail form is unchanged.
+  * `~` had a token (TILDE) and an emitter branch (`xor` with -1) but no unary
+    production. It is in the `prim` unary set now, and the resolver rejects
+    `~` on bool/float ("unary ~ on non integer": the xor is meaningless on an
+    i1 and on a float's bit pattern).
+  * method turbofish: the postfix `.` branch took a name and only looked for
+    `(`, so `s.get<i32>(5)` parsed as `(s.get) < i32 > (5)`. A `<...>` that
+    `isTypeArg` accepts *and* that ends right before `(` is now parsed with
+    `generics()` and passed to the existing `call(scope, name, is_static, ta)`
+    overload; otherwise `<` stays a comparison. `MethodResolver` already reads
+    `Call.type_args` (inference + candidate matching), so no resolver change
+    was needed; a wrong arity is a clean "type arg size mismatched".
+  Tests: tests/normal/69-stmt-semicolon.x, 70-unary-tilde.x,
+  71-method-turbofish.x (explicit/inferred args and the `v < 20` comparison
+  regression), tests/fail/tilde_bool.x and tests/fail/method_turbofish_args.x.
+  All five red on v1.20. Suite green on the fixpoint binary with
+  MALLOC_CHECK_=3 (`normal pass=158 xpass=0`; all gates pass, leak
+  self-skips). Triangle: A bakes the 685 absolute panic literals, B/C/D the
+  685 relative ones; `nm` A == B, the literals are identical after
+  normalizing the prefix, B == C == D byte-identical (stage1 and every .a).
+  Remaining grammar holes: enum tuple variants and the `%=` family (plus the
+  `^=` emitter panic). The prim2(false) item stays: every expression it would
+  newly allow cannot type-check in those positions today (match/if-let need
+  enums, `for` needs arrays, enum `as` casts are unsupported) and object
+  literals must remain parenthesized to avoid the `match x {` ambiguity, so
+  it is parser hygiene with no user-visible case yet.
 
 ## Known open holes (documented, not yet solved)
 
