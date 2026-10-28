@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-28. Main: `3473901` (owns `681a8cc` array places, place
+Date: 2026-10-28. Main: `dd34aaa` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -63,7 +63,9 @@ the is(a, b) lookahead past the end see a synthetic EOF token, and
 popv/name/parse_item report the end of input instead of indexing the token
 list), and tuple structs + empty enums `3473901` (positional
 `struct T(i32, bool);` built as `T{1, true}` and read/written as `t.0`, with
-Clone/Drop/Debug/Display and the incremental cache; `enum Never {}`).
+Clone/Drop/Debug/Display and the incremental cache; `enum Never {}`), and the
+`null` literal removed `dd34aaa` (`null` is an IDENT now -- the null pointer is
+`ptr::null<T>()`; `let x: T;` recorded as not planned).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2563,6 +2565,29 @@ Ownership only — no Rust-like borrows:
   mid-resolve; a minimal `Option<T>` repro reports "use after move"
   correctly, so the trigger needs the AST-shaped context). Worked around with
   a `has_base` flag; the crash itself is an open robustness item.
+
+- `null` is no longer a literal (2026-10-28, on `no-null-literal`). `null`
+  lexed as NULL_LIT, but neither `isLit` nor `isName` accepted the token, so
+  the spelling could be used neither as a value nor as a name. The null
+  pointer is the `ptr::null<T>()` intrinsic (resolver + emitter), so the
+  literal was removed instead of becoming a second way to write it:
+  * `Lexer::make_keywords` no longer maps `"null"` and `TokenType` loses
+    `NULL_LIT`. `null` is an IDENT now (like `void`), so a local named `null`
+    is legal; the keyword table is 40 entries.
+  * an undeclared `null` in value position gets a pointed diagnostic in
+    `Resolver::visit_name` ("`null` is not a literal; use ptr::null<T>()"),
+    on the lookup-miss path only, so a user-declared `null` still resolves.
+  * grammar/Lexer.g and grammar/Parser.g updated.
+  * `let x: T;` is recorded as *not planned* (user, 2026-10-28): it needs
+    definite-assignment analysis, and `let x = ...;` covers the use.
+  Tests: tests/normal/68-null-identifier.x (a local named `null` plus
+  `ptr::null<i8>()`/`is_null`) and tests/fail/null_not_literal.x. Both are red
+  on v1.20 (NULL_LIT parse error). Suite green on the fixpoint binary with
+  MALLOC_CHECK_=3 (`normal pass=153 xpass=0`; all gates pass, leak
+  self-skips). Triangle: A bakes the 685 absolute panic literals, B/C/D the
+  685 relative ones; `nm` A == B, the literals are identical after
+  normalizing the prefix, and B == C == D byte-identical (stage1 and every
+  .a).
 
 ## Known open holes (documented, not yet solved)
 
