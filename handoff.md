@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-27. Main: `b15cc7c` (owns `681a8cc` array places, place
+Date: 2026-10-28. Main: `3473901` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -61,7 +61,9 @@ unwrap panic; grammar/Lexer.g and grammar/Parser.g synced in
 `8b5dd25`/`6eb24b7`), and the parser EOF token `b15cc7c` (peek/peek(1) and
 the is(a, b) lookahead past the end see a synthetic EOF token, and
 popv/name/parse_item report the end of input instead of indexing the token
-list).
+list), and tuple structs + empty enums `3473901` (positional
+`struct T(i32, bool);` built as `T{1, true}` and read/written as `t.0`, with
+Clone/Drop/Debug/Display and the incremental cache; `enum Never {}`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2516,7 +2518,69 @@ Ownership only — no Rust-like borrows:
   `nm` A == B, the literals are identical after normalizing the prefix, and
   B == C == D byte-identical (stage1 and every .a).
 
+- Tuple structs and empty enums (2026-10-28, on `tuple-struct-enums`).
+  Two parser holes left in the grammar sync: `struct T(i32);` never parsed
+  (`parse_struct` tested for LPAREN and then consumed LBRACE), and `enum E {}`
+  required a first variant. Both are real features now:
+  * a tuple struct stores unnamed `FieldDecl`s. The literal is the
+    unnamed-entry object form literals already accept (`T{1, true}`), fields
+    are read and written by index (`t.0`), and `Decl::get_fields()` plus
+    `findField` cover TupleStruct, so the resolver, the ownership walk
+    (partial moves, whole reassignment), the emitter (`set_fields`/GEP) and
+    the incremental field-type compare work without name plumbing.
+  * the three derive `panic("todo")` arms (Clone, Drop, Debug/Display) and the
+    emitter's literal arm are implemented: fields are copied/cloned by index,
+    dropped in order (`Drop::drop(self.0)`), and printed as `T(1, 2)`. A
+    positional struct with an owning field now gets the automatic Drop; the
+    normal test pins it with a counted `Res::drop` (two holders, two drops).
+  * generic tuple structs infer the parameters from the positional entries
+    (`inferStruct`'s unnamed path).
+  * a base on a tuple struct is a parse error: the field list is the whole
+    body (`mapType` has no base case), so inheriting would shift every index.
+  * an empty enum needs no layout change: `mapType` sizes the data array from
+    the variant list and every derive/drop loop just iterates it, so the type
+    works as a field/parameter/return type (`func f(n: Never)`), and its
+    Debug/Clone/Display derives compile. `match n {}` is still rejected by
+    `visit_match` ("node case") -- see the open hole below.
+  * enum tuple variants (`A(i32)`) remain unsupported: the variant "(" form
+    still takes `name: type` (documented in grammar/Parser.g).
+  Tests: tests/normal/67-tuple-struct.x (construct/access/assign, Clone,
+  Debug+Display incl. a generic instantiation, owning field with a counted
+  Drop, zero-field and generic tuple structs, empty enum as a
+  field/param/return type), six fail tests (tuple_struct_base, _named,
+  _index, _bounds, _count, _cyclic) and tests/fmt/tuple-struct.x
+  (+`.expected`, idempotent). All six fail tests are red on v1.20 (it cannot
+  parse the declaration). Suite green on the fixpoint binary with
+  MALLOC_CHECK_=3 (`normal pass=151 xpass=0`; fmt, debug, trace, std, lsp,
+  own, vararg, inc, tools, buildflags, pipeline, path and opt pass; leak
+  self-skips). Triangle: A (v1.20) bakes 685 absolute panic literals, B/C/D
+  685 relative ones (685, not 689: the four `panic("todo")` arms became code);
+  `nm` A == B, the literals are identical after normalizing the prefix, and
+  B == C == D byte-identical (stage1 and every .a).
+  Note for the next batch: writing `if(base.is_some())` on a local
+  `Option<Type>` that had already been moved into a struct literal made the
+  compiler exit 1 with no diagnostic while compiling parser.x (the log stops
+  mid-resolve; a minimal `Option<T>` repro reports "use after move"
+  correctly, so the trigger needs the AST-shaped context). Worked around with
+  a `has_base` flag; the crash itself is an open robustness item.
+
 ## Known open holes (documented, not yet solved)
+
+Empty enum elimination: `match n {}` (zero arms) is a clean diagnostic today
+(`Resolver::visit_match`: "node case"); the type itself works as a
+field/parameter/return type. Accepting it would mean allowing an empty case
+list for a zero-variant enum (the emitter already builds an empty switch); it
+was left out of the tuple-struct/empty-enum batch on purpose. Enum tuple
+variants are the other half of the same area: `A(i32)` still needs
+`A(name: i32)`.
+
+Compiler robustness (found 2026-10-28): calling a by-value `Option` method
+(`base.is_some()`) on a local `Option<Type>` that had already been moved into a
+struct literal made the compiler exit 1 with no diagnostic while compiling
+parser.x (the log stops mid-resolve). A minimal `Option<T>` shape reports "use
+after move" correctly, so the trigger seems to need the AST-shaped recursive
+`Type`. `parse_struct` tracks the base with a `has_base` bool instead; the
+crash itself is not reproduced in isolation yet.
 
 Moves inside a loop body: CLOSED 2026-10-24 (see the entry above). Reported
 at the move's line for the back-edge, a `continue` path and a `break` path;
