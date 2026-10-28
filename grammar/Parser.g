@@ -35,11 +35,17 @@ attribute: "#" "["? name ("(" expr ("," expr)* ")")? "]"?;
 
 //items--------------------------------------------------------------
 structDecl:
-  "struct" type (":" type)? (";" | "{" structField* "}");
+  "struct" type (":" type)? (";" | "{" structField* "}"
+                             | "(" tupleField ("," tupleField)* ","? ")" ";");
 structField: raw_name ":" type ";";    //the last field needs its ";" too
+//positional fields: built/read as `T{1, 2}` / `t.0`, no names. The tuple form
+//takes no base class (a base would shift every index); the resolver rejects
+//the combination when it is written.
+tupleField: type;
 
 enumDecl:
-  "enum" type (":" type)? "{" variant ("," variant)* ","? "}";
+  "enum" type (":" type)? "{" (variant ("," variant)* ","?)? "}";
+//zero variants is legal: an uninhabited type (`enum Never {}`).
 variant:
   name ("(" variantField ("," variantField)* ")"
       | "{" variantField ("," variantField)* "}")?
@@ -201,10 +207,9 @@ simpleType: raw_name ("<" type ("," type)* ">")?;
 //parser's lookahead (isTypeArg) accepts the tokens up to the closing ">".
 
 //Known holes in the current syntax (each is a parse error today):
-//  * `struct T(i32);` -- parse_struct tests for LPAREN but then consumes
-//    LBRACE, so tuple structs never parse.
-//  * `enum E {}` -- at least one variant is required.
 //  * `let x: T;` -- a `let` always needs "=" expr.
+//  * enum tuple variants -- the variant "(" form still parses `name: type`
+//    entries, so `A(i32)` does not parse (only tuple *structs* are positional).
 //  * `null` -- NULL_LIT is neither isLit nor isName, so it is not usable.
 //  * `a %= b`, `a &= b`, `a |= b`, `a <<= b`, `a >>= b` -- get_prec knows
 //    PERCENTEQ/ANDEQ/OREQ/LTLTEQ/GTGTEQ, but the lexer never produces those

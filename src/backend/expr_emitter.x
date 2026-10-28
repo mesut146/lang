@@ -1673,7 +1673,9 @@ impl Emitter{
             self.set_fields(ptr, decl, ty, args, fields);
           },
           Decl::TupleStruct(fields)=>{
-            panic("todo");
+            //positional fields land in declaration order; set_fields already
+            //has the unnamed-entry path (field_idx) that struct literals use.
+            self.set_fields(ptr, decl, ty, args, fields);
           },
           Decl::Enum(variants)=>{
             let variant_index = Resolver::findVariant(decl, type.name());

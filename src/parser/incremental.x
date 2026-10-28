@@ -219,7 +219,18 @@ impl Incremental{
                 }
             },
             Decl::TupleStruct(fields) => {
-                //todo
+                match old{
+                    Decl::TupleStruct(fields2) => {
+                        //same layout rule as a struct, minus names
+                        if(compare_tuple_struct(fields, fields2)){
+                            return true;
+                        }
+                    },
+                    _=> {
+                        //was something else but now a tuple struct
+                        return true;
+                    }
+                }
             },
             Decl::Enum(variants)=>{
                 match old{
@@ -244,6 +255,15 @@ impl Incremental{
             let fd2 = fields2.get(i);
             if(!fd.name.get().eq(fd2.name.get())) return true;
             if(!fd.type.eq(&fd2.type)) return true;
+        }
+        return false;
+    }
+    func compare_tuple_struct(fields: List<FieldDecl>*, fields2: List<FieldDecl>*): bool{
+        if(fields.len() != fields2.len()){
+            return true;
+        }
+        for(let i = 0;i < fields.len();i += 1){
+            if(!fields.get(i).type.eq(&fields2.get(i).type)) return true;
         }
         return false;
     }

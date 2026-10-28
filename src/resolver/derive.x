@@ -217,7 +217,29 @@ func generate_clone(r: Resolver*, decl: Decl*, unit: Unit*): Impl{
             body.list.add(return_stmt);
         },
         Decl::TupleStruct(fields)=>{
-            panic("todo");
+            for(let i = 0;i < fields.len();++i){
+                let fd = fields.get(i);
+                if(fd.type.is_pointer() || is_clone_copy(decl, &helper, &fd.type)){
+                    //let __<i> = self.<i>;  (pointer or plain value: a copy)
+                    body.list.add(parse_stmt(format("let __{} = self.{};", i, i), unit, line));
+                }else{
+                    //let __<i> = self.<i>.clone();
+                    body.list.add(parse_stmt(format("let __{} = self.{}.clone();", i, i), unit, line));
+                }
+            }
+            let str2 = Fmt::new();
+            str2.print("return ");
+            str2.print(&decl.type);
+            str2.print("{");
+            for(let i = 0;i < fields.len();++i){
+                if(i > 0){
+                    str2.print(", ");
+                }
+                str2.print(format("__{}", i));
+            }
+            str2.print("};");
+            let return_stmt = parse_stmt(str2.unwrap(), unit, line);
+            body.list.add(return_stmt);
         }
     }
     let m = Method::new(unit.node(decl.line), "clone".str(), decl.type.clone());
@@ -297,7 +319,13 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             }
         },
         Decl::TupleStruct(fields)=>{
-            panic("todo");
+            for(let i = 0;i < fields.len();++i){
+                let fd = fields.get(i);
+                if(!is_struct(&fd.type)) continue;
+                //Drop::drop(self.<i>);
+                let drop_stmt = parse_stmt(format("Drop::drop(self.{});", i), unit, line);
+                body.list.add(drop_stmt);
+            }
         }
     }
     let m = Method::new(unit.node(line), "drop".str(), Type::new("void"));
@@ -476,7 +504,24 @@ func generate_printer(decl: Decl*, unit: Unit*, trait_name: str, method_name: st
             body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
         },
         Decl::TupleStruct(fields)=>{
-            panic("todo");
+            body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
+            body.list.add(parse_stmt("f.print(\"(\");".str(), unit, line));
+            for(let i = 0;i < fields.len();++i){
+                let fd = fields.get(i);
+                if(i > 0){
+                    body.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
+                }
+                if(fd.type.is_pointer()){
+                    body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", i), unit, line));
+                }else{
+                    if(decl.is_generic){
+                        body.list.add(parse_stmt(format("{}(self.{}, f);", generic_helper2, i), unit, line));
+                    }else{
+                        body.list.add(parse_stmt(format("{}(&self.{}, f);", call_path, i), unit, line));
+                    }
+                }
+            }
+            body.list.add(parse_stmt("f.print(\")\");".str(), unit, line));
         }
     }
     m.body = Option::new(body);

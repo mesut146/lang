@@ -544,9 +544,11 @@ impl Parser{
     //type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
+    let has_base = false;
     if(self.is(TokenType::COLON)){
       self.pop();
       base = Option<Type>::Some{self.parse_type()};
+      has_base = true;
     }
     let path0 = self.lexer.path.clone();
     let name = type.name().owned();
@@ -565,11 +567,25 @@ impl Parser{
       return Decl::Struct{.based, fields: fields};
     }
     else if(self.is(TokenType::LPAREN)){
-      self.consume(TokenType::LBRACE);
-      while(!self.is(TokenType::RBRACE)){
-        fields.add(FieldDecl{Option<String>::new(), self.parse_type()});
+      //tuple struct: `struct T(i32, bool);`. Positional fields (FieldDecl with
+      //no name) are built, constructed and read by index (t.0). A base would
+      //shift every index behind the inherited prefix while mapType/reporting
+      //treat the list as the whole body, so reject it instead of laying the
+      //type out wrong.
+      if(has_base){
+        self.err("tuple struct cannot have a base class");
       }
-      self.consume(TokenType::RBRACE);
+      self.consume(TokenType::LPAREN);
+      while(!self.is(TokenType::RPAREN)){
+        fields.add(FieldDecl{Option<String>::new(), self.parse_type()});
+        if(self.is(TokenType::COMMA)){
+          self.pop();
+        }else{
+          break;
+        }
+      }
+      self.consume(TokenType::RPAREN);
+      self.consume(TokenType::SEMI);
       return Decl::TupleStruct{.based, fields: fields};
     }
     else{
@@ -603,13 +619,16 @@ impl Parser{
     }
     self.consume(TokenType::LBRACE);
     let variants = List<Variant>::new();
-    variants.add(self.parse_variant());
-    while(self.is(TokenType::COMMA)){
-      self.pop();
-      if(self.is(TokenType::RBRACE)){
+    //zero variants is legal (`enum Never {}`): an uninhabited type has no
+    //values to build, and every consumer (mapType's tag+data layout, the
+    //derive/drop loops, the printer) already walks the variant list without
+    //assuming a first element.
+    while(!self.is(TokenType::RBRACE)){
+      variants.add(self.parse_variant());
+      if(!self.is(TokenType::COMMA)){
         break;
       }
-      variants.add(self.parse_variant());
+      self.pop();
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();

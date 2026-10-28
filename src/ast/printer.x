@@ -645,17 +645,18 @@ func debug_decl(self: Decl*, f: Fmt*, comments: List<Comment>*){
         decl.base.get().debug(f);
       }
       if(fields.empty()){
-          f.print(";");
+          f.print("();");
           return;
       }
       f.print("(\n");
       for(let i = 0;i < fields.len();++i){
         if(i > 0){
-          f.print(", ");
+          f.print(",\n");
         }
+        f.print("    ");
         fields.get(i).type.debug(f);
       }
-      f.print(")");
+      f.print("\n);");
   }
 
 

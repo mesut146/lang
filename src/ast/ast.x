@@ -394,7 +394,13 @@ impl Decl{
     if let Decl::Struct(fields) = self{
       return fields;
     }
-    panic("get_fields");
+    //a tuple struct's positional fields are its fields too (no names, index
+    //access); the resolver/ownership code that walks a decl's fields shares
+    //this accessor.
+    if let Decl::TupleStruct(fields) = self{
+      return fields;
+    }
+    panic("get_fields {:?}", self.type);
   }
 }
 

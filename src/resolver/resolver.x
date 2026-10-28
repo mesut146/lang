@@ -1815,7 +1815,7 @@ impl Resolver{
     }
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get(i);
-      //self.is_valid_field(ty, node, base_fields);
+      self.is_valid_field(fd, node, base_fields);
     }
   }
   func visit_enum(self, node: Decl*, vars: List<Variant>*){
@@ -2610,6 +2610,19 @@ impl Resolver{
                 ++idx;
             }
         }
+        //a positional struct's field is selected by number. Shared with the
+        //emitter, which turns the returned index into the GEP; put the numeric
+        //match here instead of duplicating the lookup there.
+        if (cur is Decl::TupleStruct) {
+            let fields = cur.get_fields();
+            let idx0 = i32::parse(name.str());
+            if(idx0.is_ok()){
+                let idx = idx0.unwrap();
+                if(idx >= 0 && idx < fields.len()){
+                    return Pair::new(cur, idx);
+                }
+            }
+        }
         if (cur.base.is_some()) {
             let base = self.get_decl(cur.base.get());
             if(base.is_none()) break;
@@ -2644,6 +2657,22 @@ impl Resolver{
       self.err(node, msg);
     }
     let decl = self.get_decl(&scp).unwrap();
+    if(decl is Decl::TupleStruct){
+      //positional field: t.0, t.1. Same index/error rules as a tuple value,
+      //but the element types come from the declaration.
+      let fields = decl.get_fields();
+      let idx0 = i32::parse(name.str());
+      if(idx0.is_err()){
+        let msg = format("tuple struct index not int {} {:?}", name, decl.type);
+        self.err(node, msg);
+      }
+      let idx = idx0.unwrap();
+      if(idx < 0 || idx >= fields.len()){
+        let msg = format("tuple struct index out of bounds {} max: {} {:?}", name, fields.len(), decl.type);
+        self.err(node, msg);
+      }
+      return self.visit_field(fields.get(idx));
+    }
     let pair = self.findField(node, name, decl, &scp.type);
     let fd = pair.a.get_fields().get(pair.b);
     return self.visit_field(fd);
@@ -2732,7 +2761,24 @@ impl Resolver{
         }
       },
       Decl::TupleStruct(types)=>{
-        self.err(node, "todo");
+        //positional fields only: `T{1, true}` (the unnamed-entry form the
+        //parser already accepts for struct literals). There are no field names
+        //to match against, so a named entry is a user error.
+        if(hasNamed){
+          self.err(node, format("tuple struct fields are positional: give values in order (no names) for {:?}", decl.type));
+        }
+        fields0 = Option::new(types);
+        type_opt = Option::new(decl.type.clone());
+        if (decl.is_generic) {
+            let scp = Option<Type>::new();
+            if(type0.is_simple() && type0.as_simple().scope.is_some()){
+              scp.set(type0.as_simple().scope.get().clone());
+            }
+            let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, types, args);
+            res = self.visit_type(&inferred);
+            let gen_decl = self.get_decl(&res).unwrap();
+            fields0 = Option::new(gen_decl.get_fields());
+        }
       }
     }
     let type = type_opt.unwrap();
@@ -2757,7 +2803,7 @@ impl Resolver{
         }
         let fd = fields.get(prm_idx);
         //todo if we support unnamed fields, change this
-        if (!hasNamed) {
+        if (!hasNamed && fd.name.is_some()) {
             names.add(fd.name.get().clone());
         }
         let pt = self.getType(&fd.type);
@@ -2771,6 +2817,9 @@ impl Resolver{
     //check non set fields
     for (let i = 0;i < fields.len();++i) {
         let fd = fields.get(i);
+        //positional fields (tuple structs) have no name to look up; the count
+        //check above already guarantees each was supplied exactly once.
+        if (fd.name.is_none()) continue;
         if (!names.contains(fd.name.get())) {
             let msg = format("field not set: {}", fd.name.get());
             self.err(node, msg);

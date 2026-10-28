@@ -1747,11 +1747,21 @@ impl Own{
             }
         }else{
             let decl = resolver.get_decl(&rt).unwrap();
-            let fields = decl.get_fields();
-            for fd in fields{
-                names.add(fd.name.get().clone());
-                types.add(fd.type.clone());
-                places.add(Rhs::new(var.clone(), fd.name.get().clone()));
+            if(decl is Decl::TupleStruct){
+                //positional fields: same place names Rhs::new gives `t.0`.
+                let fields = decl.get_fields();
+                for(let i = 0;i < fields.len();++i){
+                    names.add(format("{}", i));
+                    types.add(fields.get(i).type.clone());
+                    places.add(Rhs::new(var.clone(), names.get(i).clone()));
+                }
+            }else{
+                let fields = decl.get_fields();
+                for fd in fields{
+                    names.add(fd.name.get().clone());
+                    types.add(fd.type.clone());
+                    places.add(Rhs::new(var.clone(), fd.name.get().clone()));
+                }
             }
         }
         let moved_fields = List<String>::new();
