@@ -213,14 +213,9 @@ simpleType: raw_name ("<" type ("," type)* ">")?;
 //    PERCENTEQ/ANDEQ/OREQ/LTLTEQ/GTGTEQ, but the lexer never produces those
 //    tokens (`%=` is PERCENT EQ, and so on; see Lexer.g). `^=` does lex; it
 //    parses but has no resolver/emitter branch.
-//  * a ";" after an if / if let / match / while / for / block statement in a
-//    block.
 //  * for-each sources, match scrutinees and if-let values are prim2(false):
 //    no binary operator, no `as` cast and no object literal. `for x in a + b
 //    { }` and `match a + b { }` do not parse.
-//  * `x.f<i32>()` -- a postfix `.` call takes no type arguments, so method
-//    turbofish does not parse (free functions do: `f<i32>(x)`).
-//  * `~` exists as a token but has no unary production.
 //
 //Not planned (user, 2026-10-28): `null` is not a literal -- the lexer no
 //longer reserves the name and the null pointer is `ptr::null<T>()`. `let x:

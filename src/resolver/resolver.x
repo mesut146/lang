@@ -2878,6 +2878,14 @@ impl Resolver{
       }
       return res;
     }
+    //`~` is the bitwise complement: integers only (the emitter xors with -1,
+    //which is meaningless for bool or a float's bit pattern).
+    if(op.eq("~")){
+      if(res.type.eq("bool") || res.type.is_float() || !res.type.is_prim()){
+        self.err(node, "unary ~ on non integer");
+      }
+      return res;
+    }
     if (res.type.eq("bool") || !res.type.is_prim()) {
       self.err(node, "unary on non integer");
     }

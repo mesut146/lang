@@ -811,10 +811,15 @@ func parse_block(self): Block{
         if(self.is(TokenType::RBRACE)){
           res.return_expr.set(expr);
           break;
-        }else{
-          let id = *(expr as Node*);
-          res.list.add(Stmt::Expr{.id, expr});
         }
+        //an optional ";" after a block-like statement, the same one the
+        //generic statement path below eats. Without it the ";" was left for
+        //the next iteration, where parse_expr rejected it.
+        if(self.is(TokenType::SEMI)){
+          self.pop();
+        }
+        let id = *(expr as Node*);
+        res.list.add(Stmt::Expr{.id, expr});
       }
       else if(self.is_stmt()){
         res.list.add(self.parse_stmt());
@@ -948,9 +953,18 @@ func parse_block(self): Block{
       let e = self.parse_expr();
       self.consume(TokenType::RPAREN);
       let b = self.parse_body();
+      //`while (c) { ... };` (the body is a block, so no ";" was consumed)
+      if(self.is(TokenType::SEMI)){
+        self.pop();
+      }
       return Stmt::While{.id, e, Box::new(b)};
     }else if(self.is(TokenType::FOR)){
-      return self.parse_for(id);
+      let st = self.parse_for(id);
+      //same optional ";" after the loop
+      if(self.is(TokenType::SEMI)){
+        self.pop();
+      }
+      return st;
     }else if(self.is(TokenType::CONTINUE)){
       self.pop();
       self.consume(TokenType::SEMI);
@@ -1357,7 +1371,7 @@ impl Parser{
       self.consume(TokenType::RBRACKET);
       return Expr::Array{.n, arr, sz};
     }
-    else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
+    else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS) || self.is(TokenType::TILDE)){
       let op = self.popv();
       let e = self.prim2(allow_obj);
       return Expr::Unary{.n, op, Box::new(e)};
@@ -1466,8 +1480,18 @@ impl Parser{
           res = Expr::Access{.n, Box::new(res), idx.value.owned()}; 
         }else{
           let nm = self.name();
+          //method turbofish: `x.f<i32>(a)`. Only a `<...>` that the type-arg
+          //lookahead accepts *and* that ends right before `(` is a turbofish;
+          //otherwise `<` stays the comparison operator (`x.f < y`).
+          let ta = List<Type>::new();
+          if(self.is(TokenType::LT)){
+            let end = self.isTypeArg(self.pos);
+            if(end != -1 && self.get(end).is(TokenType::LPAREN)){
+              ta = self.generics();
+            }
+          }
           if(self.is(TokenType::LPAREN)){
-            res = self.call(res, nm, false);
+            res = self.call(res, nm, false, ta);
           }else{
             let n = self.node();
             res = Expr::Access{.n, Box::new(res), nm}; 
